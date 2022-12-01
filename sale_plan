@@ -1,0 +1,715 @@
+<template>
+  <vc-breadcrumb>
+    <div class="container pp-sale-plan">
+      <!-- <vc-card class="card card-body shadow-sm"> -->
+      <v-row>
+        <v-col cols="8">
+          <v-form ref="searchForm" lazy-validation>
+            <vc-card class="card card-body shadow-sm c_search_area ml-6 mr-6 mb-0 mt-0 pt-2">
+              <v-row>
+                <v-col cols="2">
+                  <vc-input-group required :label="salePlanSearch.order_ym.label">
+                    <vc-picker-month v-model="salePlanSearch.order_ym.value" class="date__picker_input" :rules="[
+                          (v: any) => validate.required(v, salePlanSearch.order_ym.label),
+                          (v: any) => validate.monthYearValidate(v, salePlanSearch.order_ym.label),
+                          ]">
+                    </vc-picker-month>
+                  </vc-input-group>
+                </v-col>
+      
+              </v-row>
+              <v-row>
+                <v-col cols="2">
+      
+                  <vc-input-group :label="salePlanSearch.item_class_cd2.label">
+                    <vc-select v-model="salePlanSearch.item_class_cd2.value" :items="classItemList" fieldValue="code2"
+                      fieldText="name1" />
+                  </vc-input-group>
+                </v-col>
+                <v-col cols="2">
+                  <vc-input-group :label="salePlanSearch.company_cd.label">
+                    <vc-select v-model="salePlanSearch.company_cd.value" :items="branchList" :isDisabled="!isMatsue"
+                      fieldValue="code" fieldText="company_name1" />
+                  </vc-input-group>
+                </v-col>
+                <v-col cols="2">
+                  <vc-input-group :label="salePlanSearch.item_edi_cd.label">
+                    <v-text-field ref="itemEdiCdInput" v-model="salePlanSearch.item_edi_cd.value" autofocus
+                      :maxlength="INPUT_CONFIG.MAX_LENGTH_INPUT_SEARCH" :disabled="!salePlanSearch.company_cd.value"
+                      hide-details></v-text-field>
+                  </vc-input-group>
+                </v-col>
+      
+                <v-col cols="2">
+                  <vc-input-group :label="salePlanSearch.item_name1.label">
+                    <v-text-field ref="itemNameInput" v-model="salePlanSearch.item_name1.value"
+                      :maxlength="INPUT_CONFIG.MAX_LENGTH_INPUT_SEARCH" hide-details>
+                    </v-text-field>
+                  </vc-input-group>
+                </v-col>
+                <v-col cols="4" class="button_line_height d-flex flex-end">
+                  <vc-btn-small :class="'v-btn-normal ml-2'" @click="handleSearch">{{ tl('Common', 'BtnSearch') }}
+                  </vc-btn-small>
+                  <vc-btn-small :class="'v-btn-red ml-2'" @click="resetSearchCondition">{{ tl('Common', 'BtnClear') }}
+                  </vc-btn-small>
+                </v-col>
+              </v-row>
+            </vc-card>
+          </v-form>
+        </v-col>
+        <v-col cols="4">
+          <vc-btn-medium :class="'v-btn-normal ml-2'" @click="exportPetSalePlan" :disabled="!listItem.length">{{ tl('Common',
+            'BtnExportData') }}</vc-btn-medium>
+          <vc-btn-medium :class="'v-btn-normal ml-2'" @click="removeItem" :disabled="isDisableCreateButton">{{ tl('O_S058',
+            'BtnRemoveItem') }}
+          </vc-btn-medium>
+          <vc-btn-medium :class="'v-btn-normal ml-2'" @click="showPopupProduct" :disabled="isDisableCreateButton">{{
+            tl('O_S058', 'BtnAddItem') }}
+          </vc-btn-medium>
+          <vc-btn-small :class="'v-btn-normal ml-2'" @click="registerSalePlan" :disabled="isDisableCreateButton">{{
+            tl('Common', 'BtnSaveShort')
+            }}
+          </vc-btn-small>
+        </v-col>
+      </v-row>
+      <v-form ref="createSalePlanForm" lazy-validation>
+        <v-row>
+          <v-col cols="12" class="c_search_result" >
+            <p class="content" v-html="tl('Common', 'SearchResult', [listItem.length])"></p>
+          </v-col>
+          <v-col cols="12">
+            <vc-card class="ml-6 mr-6">
+              <v-table fixed-header class="vc-table" density="compact" :height="'50vh'">
+                <!-- TABLE HEADER -->
+                <thead class="c_header_table">
+                  <!-- HEADER PRODUCT ITEM -->
+                  <tr>
+                    <template v-for="(colSum, index) in listColsSum" :key="index">
+                      <th class="pa-2 text-center c_font_weight_bold" rowspan="2" :class="[colSum.class]">
+                        {{colSum.label}}</th>
+                    </template>
+                       <!-- HEADER DATE IN MONTH -->
+                    <template v-for="(month, index) in listMonth" :key="`month_${index}`">
+                      <th class="pa-2 text-center c_font_weight_bold w-month" colspan="2">
+                        {{month.label}}</th>
+                    </template>
+                    <!-- HEADER ACTION -->
+                    <th class=" pa-2 text-center c_font_weight_bold w-action" rowspan="2">
+                      {{tl('O_S058','action')}}</th>
+                  </tr>
+                  <tr>
+                    <template v-for="(month, index) in [...listMonth,...listMonth]" :key="`detail_${index}`">
+                      <th class="pa-2 text-center c_font_weight_bold " >{{index%2===0?'本':'総m数'}}</th>
+                    </template>
+                  </tr>
+                </thead>
+                   <!-- TABLE BODY -->
+                <tbody class="table-body c_table_height c_body_table">
+                  <!-- NO DATA -->
+                  <template v-if="!listItem || listItem.length == 0">
+                    <tr class="tb-row">
+                      <td :colspan="15" class="text-center">
+                        {{ tl('Common', 'NoData') }}
+                      </td>
+                    </tr>
+                  </template>
+                  <!-- HAVE DATA -->
+                  <template v-else>
+                    <tr class="tb-row" v-for="(item, indexRow) in listItem" :key="indexRow" @click="clickItem(item)" :class="{selected_product:item.item_cd ===selectedItem }">
+                      <!-- PRODUCT ITEM INFORMATION -->
+                      <template v-for="(col, index) in listColsSum" :key="`sum_col_${index}`">
+                        <td :title="formatData(item[col.key],col)" class="pa-2 text-left ellipsis" :class="[col.class]">
+                          {{ formatData(item[col.key],col)}}</td>
+                      </template>
+                       <!-- PRODUCT ITEM INFORMATION FOR EVERY DATE -->
+                      <template v-for="(dataMonth, indexCol) in item.data" :key="`dataMonth_col_${indexCol}`">
+                        <template v-for="(unitData, index) in ['order_qty','order_qty2']" :key="`order_qty_${index}`">
+                          <!-- CASE SUM: SHOW DATA -->
+                          <td v-if="dataMonth.monthNum === -1" :title="dataMonth[unitData]" class="pa-1 text-right w-qty ellipsis">
+                            {{ numberUtil.formatCommas(dataMonth[unitData])}}</td>
+                             <!-- CASE ORDER_QTY: INPUT -->
+                          <td v-else-if="unitData==='order_qty'" class="w-qty">
+                            <input  
+                             v-model="dataMonth[unitData]"
+                            :title="dataMonth[unitData]?dataMonth[unitData].toString():''"  
+                            class="c_input_number_normal text-right"
+                              :class="{c_disable_input:dataMonth?.isPast}" 
+                              :disabled="dataMonth?.isPast || isDisableCreateButton"
+                              @input="validateValue(indexRow,indexCol,unitData)"
+                              @blur="onBlurInput(indexRow,indexCol,unitData)"
+                              @focus="onFocusInput(indexRow,indexCol,unitData)" />
+                          </td>
+                            <!-- CASE ORDER_QTY1: SHOW DATA -->
+                          <td v-else :title="numberUtil.formatCommas(dataMonth[unitData])" class="pa-1 text-right w-qty ellipsis">
+                            {{ numberUtil.formatCommas(dataMonth[unitData])}}</td>
+                        </template>
+                      </template>
+                      <td class="w-action text-center">
+                        <vc-btn-small :class="'v-btn-normal clear-btn-area'"   :disabled="!item.data.find((x:any)=>!item.isPast) || isDisableCreateButton" @click="resetSalePlan(indexRow)">{{tl('Common', 'BtnClear')}}
+                        </vc-btn-small>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </v-table>
+            </vc-card>
+          </v-col>
+        </v-row>
+      </v-form>
+      <!-- </vc-card> -->
+
+      <vc-confirm ref="confirmDialog"></vc-confirm>
+    </div>
+    <!-- POPUP SEARCH PRODUCT -->
+    <!-- <vc-popup-product-pp-pet :isShowPopup="isShowPopupProductPP" :messages="errorMessage" @dbClick="dbClickProduct"
+    :itemType="ITEM_TYPE_CODE.TYPE_B_J"
+      @closePopup="closePopupProduct" @selectedData="dbClickProduct">
+    </vc-popup-product-pp-pet> -->
+    <vc-popup-product-pp :isShowPopup="isShowPopupProductPP" :messages="errorMessage" @dbClick="dbClickProduct"
+    :otherParams="{sample_f:0}"
+      @closePopup="closePopupProduct" @selectedData="dbClickProduct">
+    </vc-popup-product-pp>
+    <vc-popup-product-pet :isShowPopup="isShowPopupProductPet" :messages="errorMessage" @dbClick="dbClickProduct"
+    :otherParams="{sample_f:0}"
+      @closePopup="closePopupProduct" @selectedData="dbClickProduct">
+    </vc-popup-product-pet>
+  </vc-breadcrumb>
+</template>
+
+<script setup lang="ts">
+import { onMounted,  ref } from 'vue'
+import tl from '@/utils/locallize'
+import moment from 'moment'
+import validate from '@/utils/validate'
+import numberUtil from '@/utils/number'
+import arrayUtil from '@/utils/array'
+import { useToastStore } from '@/stores/toast.store'
+import { useMiscStore } from '@/stores/misc.store'
+import classificationService from "@/services/classification.service";
+import companyService from "@/services/company.service";
+import systemSettingService from "@/services/system_setting.service";
+import PPSalePlanService from "@/modules/pp_shito/services/PPSalePlan.service";
+import {
+  COMPANY_BRANCH_TYPE_TEXT, EXPORT_FILE_NAME,
+  ITEM_CLASS_TYPE_PP_PET_TEXT,
+  MASTSUE_TEXT,
+  INPUT_CONFIG,
+  ITEM_TYPE_CODE,
+  CLASSIFICATION_FLAG
+} from "@/commons/const";
+import { useRouter } from "vue-router";
+import { useAuthStore } from '@/stores/auth.store'
+import VcBtnMedium from "@/components/commons/vc-btn-medium.vue";
+import { IPPSalePlan,IPPSalePlanRegister } from '@pp_shito/interfaces/PPSalePlan.interface'
+import { DATA_TYPE } from '@/commons/const'
+const SHOW_TOTAL_MONTH = 4;
+let cloneDataSearch:any ={};
+const listColsSum = [
+  { label: tl('O_S058', 'EdiCode'), key: 'item_edi_cd', class: 'w-md text-left' },
+  { label: tl('O_S058', 'ItemCode'), key: 'item_cd', class: 'w-md text-left' },
+  { label: tl('O_S058', 'ProductName1'), key: 'item_name1', class: 'w-lg text-left' },
+  { label: tl('O_S058', 'ProductName2'), key: 'item_name2', class: 'w-md text-left' },
+  { label: tl('O_S058', 'ColorName'), key: 'optval14', class: 'w-x-sm text-left' },
+  { label: tl('O_S058', 'Size1'), key: 'size1', class: 'w-x-sm text-right', dataType: DATA_TYPE.NUMBER },
+  { label: tl('O_S058', 'Size2'), key: 'size2', class: 'w-x-sm text-right', dataType: DATA_TYPE.NUMBER },
+  { label: tl('O_S058', 'Size3'), key: 'size3', class: 'w-x-sm text-right', dataType: DATA_TYPE.NUMBER },
+]
+
+const salePlanSearch = ref<any>({
+  order_ym: {
+    label: tl('O_S058', 'OrderYm'),
+    value: ref<any>({
+      month: new Date().getMonth(),
+      year: new Date().getFullYear(),
+    }),
+  },
+  company_cd: {
+    label: tl('O_S058', 'CompanyCd'),
+    value: ''
+  },
+  item_class_cd2: {
+    label: tl('O_S058', 'ClassItem'),
+    value: ''
+  },
+  item_edi_cd: {
+    label: tl('O_S058', 'ItemEdiCd'),
+    value: ''
+  },
+  item_name1: {
+    label: tl('O_S058', 'ItemName1'),
+    value: ''
+  },
+})
+const updateTime = ref<any>(null);
+const listItem = ref<IPPSalePlan[]>([])
+const classItemList = ref<any[]>([])
+const listMonth = ref<any>([]);
+const isShowPopupProductPP = ref<any>(false);
+const isShowPopupProductPet = ref<any>(false);
+const errorMessage = ref<object>({});
+const selectedItem = ref<string>('');
+const salePlanSearchDefault = ref<any>({})
+const confirmDialog = ref<any>(null)
+const branchList = ref<any[]>([])
+const systemSettingList = ref<any[]>([])
+const isDisableCreateButton = ref<any>(false)
+const createSalePlanForm = ref<any>(null)
+const changedData = ref<any[]>([])
+const isMatsue = ref<boolean>(false)
+const searchForm = ref<any>(null)
+const miscStore = useMiscStore()
+const authStore = useAuthStore()
+const router = useRouter()
+const originalData = ref<any[]>([])
+const monthIndexList = ref<number[]>([])
+onMounted(async () => {
+  await init()
+  await checkPermission()
+  await _removeBranchMatsueToSelectBox()
+  // Default param
+  salePlanSearch.value.company_cd.value = isMatsue.value ? null : authStore.getAuth.branch_cd
+  salePlanSearch.value.item_class_cd2.value =  classItemList.value[0]?.code2;
+
+  salePlanSearchDefault.value = arrayUtil.cloneObject(salePlanSearch.value)
+  cloneDataSearch =  arrayUtil.cloneObject(salePlanSearch.value)
+  await getList()
+
+})
+
+const init = async () => {
+  try {
+    // GET SETTING DATA TO CHECK PERMISSION
+    systemSettingList.value = (await systemSettingService.getList({ page: 1, size: 10000, sort: 'code.asc' }))?.data || []
+    // GET BRANCH LIST TO FILL OPTIONS BRANCH
+    branchList.value = (await companyService.getListByType({ page: 1, size: 10000, type: COMPANY_BRANCH_TYPE_TEXT, sort: 'company_name1.asc' }))?.data || []
+    branchList.value.unshift({
+        code: null,
+        company_name1: tl('O_S002', 'Sum'),
+    })
+    // GET CLASSIFICATION LIST TO FILL OPTIONS PP PET
+    classItemList.value = (await classificationService.getByType(ITEM_CLASS_TYPE_PP_PET_TEXT))?.data || []
+    // classItemList.value = arrayUtil.addEmptyObjectAtFirstIndex(classItemList.value, { code2: '', name1: '' })
+    
+  } catch (error: any) {
+    console.error('error init Data', error)
+  }
+
+}
+const _removeBranchMatsueToSelectBox = async() => {
+ if(isMatsue.value) {
+  branchList.value = branchList.value.filter(x=>x.code!==authStore.getAuth.branch_cd)
+ }
+}
+
+const _configMonthList = () => {
+  const currentDate =  moment().format('YYYY/MM/01');
+  const selectedDay = moment(salePlanSearch.value.order_ym.value).format('YYYY/MM/01');
+  const keyMonthYear = moment(salePlanSearch.value.order_ym.value).format('YYYY_M');
+  const calculateMonth = moment(salePlanSearch.value.order_ym.value).format('MM');
+  const selectedMonth = salePlanSearch.value.order_ym.value.month + 1 === Number(moment(new Date(selectedDay)).format('MM'))
+    ? '当月' : `${Number(calculateMonth)}月`;
+  const requiredMonths = [{
+    monthNum: Number(moment(salePlanSearch.value.order_ym.value).format('MM')),
+    dateMonth: selectedDay, 
+    label: selectedMonth, 
+    key: `month_${keyMonthYear}`,
+    isPast: currentDate>=selectedDay,
+  }];
+  for (let i = 1; i <= SHOW_TOTAL_MONTH; i++) {
+    const date = moment(new Date(selectedDay)).add(i, 'months').format('YYYY/MM/01')
+    const month = moment(new Date(selectedDay)).add(i, 'months').format('M')
+    const keyMonthYear = moment(new Date(date)).format('YYYY_M');
+    requiredMonths.push({
+      monthNum: Number(moment(new Date(date)).format('MM')),
+      dateMonth: date, label: `${month}月`, key: `month_${keyMonthYear}`,
+      isPast: currentDate>=date,
+    })
+  }
+  listMonth.value = [...requiredMonths, { monthNum: -1, label: tl('O_S058', 'SumAll'), key: 'sum' }]
+}
+
+const formatDataMonth = (data: any[], size3: number) => {
+  let newData = data.map((x: any) => {
+    return {
+      ...x,
+      monthNum: Number(moment(new Date(x.order_ym)).format('MM')),
+      order_qty2: x.order_qty !== null ? (numberUtil.formatCommas(x.order_qty*size3) ) : null,
+      order_qty: x.order_qty !== null ? numberUtil.formatCommas(x.order_qty) : null,
+    }
+  })
+  const findSum = newData.find((x: any) => x.sum);
+
+  if (!findSum) {
+    const { sumQty, sumQty2 } = calculateSum(newData)
+    newData = [...newData, { sum: true, order_qty: sumQty, order_qty2: sumQty2 }]
+  }
+  let finalData = [];
+  for (const [i, x] of listMonth.value.entries()) {
+    const findMonth = newData.find((item: any) => item.monthNum === x.monthNum || (item.sum && x.monthNum === -1));
+    let obj = { ...x };
+    if (findMonth) {
+      obj = { ...obj, ...findMonth }
+    }
+    finalData.push(obj)
+  }
+
+  return finalData;
+}
+
+const clickItem = (productInfo: any) => {
+ selectedItem.value = productInfo.item_cd;
+}
+
+const closePopupProduct = () => {
+  isShowPopupProductPP.value = false;
+  isShowPopupProductPet.value = false;
+
+}
+const showPopupProduct = () => {
+  if(cloneDataSearch.item_class_cd2 === CLASSIFICATION_FLAG.PP_CODE1) {
+    isShowPopupProductPP.value = true;
+  }else {
+    isShowPopupProductPet.value = true;
+  }
+}
+const findItemEdiCode = (itemEdis:any) => {
+  const findItemEdi = itemEdis.find((x:any)=>x.company_cd  === authStore.getAuth.branch_cd)
+  if(findItemEdi) return findItemEdi?.edi_cd;
+  return null;
+}
+const dbClickProduct = (item: any) => {
+  const findItemInList = listItem.value.find((x: any) => x.item_cd === item.code);
+  if(findItemInList){
+    // show toast error (duplicate product)
+    errorMessage.value = {
+      type: 'warning',
+      message: tl('Message', 'W_012')
+    }
+    return;
+  }
+
+  let dataMonth: any = [];
+
+  for (const [i, x] of listMonth.value.entries()) {
+    dataMonth.push({
+      ...x,
+      order_ym: x.dateMonth,
+      order_qty: null,
+      order_qty2: null
+    })
+  }
+
+  let obj: IPPSalePlan = {
+    item_type: item.item_type,
+    item_cd: item.code,
+    item_edi_cd:findItemEdiCode(item.item_edis),
+    item_name1: item.name1,
+    item_name2: item.name2,
+    optval14: item.optval14,
+    size1: item.size1,
+    size2: item.size2,
+    size3: item.size3,
+    data: dataMonth,
+    isNewProduct: true,
+  }
+  listItem.value = [...listItem.value, obj]
+  closePopupProduct();
+
+}
+
+
+const checkPermission = async () => {
+  const branchUser = systemSettingList.value.find((item) => item.value === authStore.getAuth.branch_cd)
+  isMatsue.value = !!(branchUser?.code === MASTSUE_TEXT)
+
+}
+
+const getList = async () => {
+  miscStore.updateLoading(true)
+  _configMonthList()
+  const params = {...arrayUtil.filterQuery(cloneDataSearch),
+    order_ym: moment(cloneDataSearch.order_ym.value).format('YYYY/MM/01'),
+  }
+  await PPSalePlanService.getByMonth(params)
+
+    .then((response: any) => {
+      // sort by month
+      if (response.data) {
+        listItem.value = response.data.map((x: any) => {
+          return {
+            item_edi_cd: x.item_edi_cd,
+            item_cd: x.item_cd,
+            item_type:x.item_type,
+            item_name2: x.item_name2,
+            item_name1: x.item_name1,
+            optval14: x.optval14,
+            size1: x.size1,
+            size2: x.size2,
+            size3: x.size3,
+            data: formatDataMonth(x.data,x.size3)
+          }
+        })
+        originalData.value = [...listItem.value];
+        selectedItem.value =''
+      }
+      updateTime.value = response.update_time;
+    })
+    .finally(() => {
+      miscStore.updateLoading(false)
+      const isPast = moment(cloneDataSearch.order_ym.value).add('months', SHOW_TOTAL_MONTH).format('YYYY/MM/01') <= moment().format('YYYY/MM/01')
+      isDisableCreateButton.value = authStore.getAuth.branch_cd !== cloneDataSearch.company_cd.value || isPast
+      changedData.value = []
+    })
+}
+
+const handleSearch = async () => {
+  const { valid } = await searchForm.value.validate();
+  if (!valid) return;
+  arrayUtil.trimObjectKeyValue(salePlanSearch.value)
+  if (miscStore.getChangeData) {
+    confirmDialog.value.confirm(tl('Common', 'NormalConfirmTitle'), tl('Message', 'W_011'), async (res: any) => {
+      if (!res) {
+        return false
+      } else {
+        miscStore.updateChangeData(false)
+        monthIndexList.value = [];
+        cloneDataSearch = arrayUtil.cloneObject(salePlanSearch.value)
+        await getList()
+      }
+    })
+  } else {
+    cloneDataSearch = arrayUtil.cloneObject(salePlanSearch.value)
+    await getList()
+  }
+}
+
+const resetSearchCondition = async () => {
+  salePlanSearch.value = arrayUtil.cloneObject(salePlanSearchDefault.value)
+}
+
+const exportPetSalePlan = async () => {
+  miscStore.updateLoading(true)
+  tl('O_S059', 'ClassItem')
+  const PPPETName = cloneDataSearch.item_class_cd2.value === CLASSIFICATION_FLAG.PP_CODE1 ? 'PP' : 'PET';
+  const file_name = `${PPPETName}_${EXPORT_FILE_NAME.PET_SALE_PLAN_MONTH}_${moment(cloneDataSearch.order_ym.value).format('YYYY年MM月')}.xlsx`
+  const params = {...arrayUtil.filterQuery(cloneDataSearch),
+    order_ym: moment(cloneDataSearch.order_ym.value).format('YYYY/MM/01'),
+    file_name
+  }
+  await PPSalePlanService
+    .exportByMonth(params)
+    .then((res: any) => {
+       return res;
+    }).finally(() => {
+      miscStore.updateLoading(false);
+    })
+}
+const removeItem = async () => {
+  if (!selectedItem.value) {
+    // Show toast warning not record selected
+    useToastStore().push({
+      type: 'warning',
+      message: tl('Message', 'W_013')
+    })
+    return;
+  }
+  // Open confirm popup
+  confirmDialog.value.confirm(
+    tl('Common', 'DeleteConfirmTitle'),
+    tl('Message', 'Q_003'),
+    async (res: any) => {
+      if (res) {
+        const params = {
+          item_cd: selectedItem.value,
+          plan_month: moment(cloneDataSearch.order_ym.value).format('YYYY/MM/01'),
+          last_update_time:updateTime.value
+        }
+        // delete item
+        const findProduct: any = listItem.value.find((x: any) => x.item_cd === params.item_cd);
+        if (!findProduct) {
+          return;
+        }
+        miscStore.updateLoading(true);
+        if (findProduct && !findProduct.isNewProduct) {
+          // If product is not new product will call api to remove
+         
+          await PPSalePlanService
+            .deleteItem(params)
+            .then((res: any) => {
+              if (res.code === 0) {
+                _removeOneProductFromList(params.item_cd)
+              }
+            })
+            .finally(() => {
+              miscStore.updateLoading(false);
+            })
+        } else {
+          // If product is new product will remove at client
+          _removeOneProductFromList(params.item_cd);
+          useToastStore().push({
+            type: 'success',
+            message: tl('Message', 'I_003')
+          })
+          miscStore.updateLoading(false);
+        } 
+
+      }
+    }
+  )
+
+}
+const _removeOneProductFromList = (itemCd:string): void => {
+  listItem.value = listItem.value.filter((x: any) => x.item_cd !== itemCd)
+  selectedItem.value =''
+}
+
+const registerSalePlan = async () => {
+  if (!miscStore.getChangeData) {
+    confirmDialog.value.alert(
+      tl('Common', 'UpdateConfirmTitle'), tl('Message', 'W_014'),
+      async (res: any) => {
+        // At here loading button is false
+      })
+    return;
+  }
+  confirmDialog.value.confirm(tl('Common', 'UpdateConfirmTitle'), tl('Message', 'Q_005'), async (res: any) => {
+    if (res) {
+      _confirmRegister()
+    }
+  })
+}
+
+const _confirmRegister = async () => {
+ 
+  const formatFormData: IPPSalePlanRegister[] = listItem.value.map((item: any) => {
+    const newObj = {
+      id: item?.id,
+      company_cd: authStore.getAuth.branch_cd,
+      item_cd: item.item_cd,
+      item_type: item?.item_type || 'B',
+      item_name1: item?.item_name1,
+      item_name2: item?.item_name2,
+      optval14: item?.optval14,
+      size1: item?.size1,
+      size2: item?.size2,
+      size3: item?.size3,
+      data: item.data.slice(0,5).map((x: any) => {
+        return {
+          order_ym: moment(new Date(x.order_ym)).format('YYYY/MM/01'),
+          order_qty: x.order_qty !== null ? Number(numberUtil.unFormatCommas(x.order_qty)) : null,
+          order_qty2: x.order_qty2 !== null ? Number(numberUtil.unFormatCommas(x.order_qty2)) : null
+        }
+      }).filter(((element:any, index:number) =>monthIndexList.value.includes(index)))
+    }
+    return newObj;
+  })
+  miscStore.updateLoading(true)
+  await PPSalePlanService
+    .update(formatFormData)
+    .then((res: any) => {
+
+      if (res.code === 0) {
+        miscStore.updateChangeData(false)
+        // getList()
+        // Need remove isChange in list
+        listItem.value = listItem.value.map((item:any)=>{
+          return {
+            ...item,
+            isNewProduct: false,
+            data: item.data.map((x:any)=>{
+              {
+                return{
+                  ...x,
+                  isChange:false
+                }
+              }
+            }),
+            
+          }
+        })
+        monthIndexList.value = [];
+      }
+    })
+    .finally(() => {
+      miscStore.updateLoading(false);
+
+    })
+}
+
+const resetSalePlan = (index: number) => {
+  listItem.value[index].data = listItem.value[index].data.map((x: any) => {
+    let newData = { ...x };
+    if (!x.isPast && x.monthNum) {
+      newData = { ...newData, order_qty: null, order_qty2: null, isChange: true };
+
+
+    }
+    return newData;
+  });
+  reloadTotal(index)
+  miscStore.updateChangeData(true);
+  monthIndexList.value = Array.from(Array(SHOW_TOTAL_MONTH+1).keys());
+}
+
+const calculateSum = (data: any) => {
+  let sumQty = 0;
+  let sumQty2 = 0;
+  for (const x of data) {
+    if(x.monthNum === -1) continue;
+    sumQty += Number(numberUtil.unFormatCommas(x.order_qty)) || 0;
+    sumQty2 += Number(numberUtil.unFormatCommas(x.order_qty2)) || 0;
+  }
+  return {
+    sumQty: numberUtil.formatCommas(sumQty), 
+    sumQty2:numberUtil.formatCommas(sumQty2)
+  }
+}
+const reloadTotal = (rowIndex: any) => {
+  const {sumQty, sumQty2} = calculateSum(listItem.value[rowIndex].data)
+  const findIndexSum = listItem.value[rowIndex].data.findIndex((x:any)=>x.monthNum === -1);
+  if(findIndexSum === -1) return;
+  listItem.value[rowIndex].data[findIndexSum] = {...listItem.value[rowIndex].data[findIndexSum], order_qty: sumQty, order_qty2:sumQty2}
+ 
+}
+
+const onBlurInput = (indexRow: number, indexCol: number, key: string) => {
+  listItem.value[indexRow].data[indexCol][key] = numberUtil.formatCommas(listItem.value[indexRow].data[indexCol][key])
+  if (key === 'order_qty') {
+    listItem.value[indexRow].data[indexCol].order_qty2 = !numberUtil.checkIsEmpty(listItem.value[indexRow].data[indexCol].order_qty) ?
+      Number(numberUtil.unFormatCommas(listItem.value[indexRow].data[indexCol].order_qty.toString())) * (listItem.value[indexRow]?.size3 || 0) : '',
+      listItem.value[indexRow].data[indexCol].order_qty2 = !numberUtil.checkIsEmpty(listItem.value[indexRow].data[indexCol].order_qty2) ?
+        numberUtil.formatNumberCommasDecimalWithFixed(listItem.value[indexRow].data[indexCol].order_qty2,0) : ''
+  }
+  reloadTotal(indexRow)
+ 
+}
+const onFocusInput = (indexRow: number, indexCol: number, key:string) => {
+  listItem.value[indexRow].data[indexCol][key] = listItem.value[indexRow].data[indexCol][key]
+    ? numberUtil.unFormatCommas(listItem.value[indexRow].data[indexCol][key]) : listItem.value[indexRow].data[indexCol][key]
+    listItem.value[indexRow].data[indexCol]= {
+      ... listItem.value[indexRow].data[indexCol],
+      isChange:true
+    }
+}
+const validateValue = (indexRow: number, indexCol: number, key:string) => {
+  listItem.value[indexRow].data[indexCol][key] = listItem.value[indexRow].data[indexCol][key].replace(/([^\d-])|(-)/g, '')
+  listItem.value[indexRow].data[indexCol][key] = listItem.value[indexRow].data[indexCol][key].length > INPUT_CONFIG.NUMBER_MAX_LENGTH
+    ? listItem.value[indexRow].data[indexCol][key].slice(0, INPUT_CONFIG.NUMBER_MAX_LENGTH)
+    : listItem.value[indexRow].data[indexCol][key];
+  miscStore.updateChangeData(true);
+
+  if(!monthIndexList.value.includes(indexCol)){
+    monthIndexList.value.push(indexCol);
+  }
+
+}
+const formatData = (value:any,colFix:any) => {
+  if(colFix.dataType === DATA_TYPE.NUMBER) {
+    return numberUtil.formatCommas(value)
+  }
+  return value;
+}
+</script>
+<style scoped lang="scss">
+@import '@/assets/styles/modules/pet_shito/o_s058.scss';
+</style>
